@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { Product, Category } from '@/types'
 import { formatRupiah } from '@/lib/utils'
@@ -20,18 +21,28 @@ export default function ProductsPage() {
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
   const [saving, setSaving] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => { fetchData() }, [])
-
-  // Kunci scroll body saat modal terbuka agar tidak double scroll
   useEffect(() => {
+    setMounted(true)
+    fetchData()
+  }, [])
+
+  // Saat modal terbuka: hapus overflow hidden dari body supaya overlay bisa scroll
+  useEffect(() => {
+    if (!mounted) return
     if (showModal) {
+      document.documentElement.style.overflow = 'hidden'
       document.body.style.overflow = 'hidden'
     } else {
+      document.documentElement.style.overflow = ''
       document.body.style.overflow = ''
     }
-    return () => { document.body.style.overflow = '' }
-  }, [showModal])
+    return () => {
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
+    }
+  }, [showModal, mounted])
 
   const fetchData = async () => {
     const [{ data: prods }, { data: cats }] = await Promise.all([
@@ -123,6 +134,206 @@ export default function ProductsPage() {
   }
   const marginData = getMargin()
 
+  // Modal dirender via Portal langsung ke document.body
+  // agar bebas dari overflow:hidden di parent manapun
+  const modalContent = (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}
+      style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.75)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 99999,          // z-index sangat tinggi agar di atas segalanya
+        overflowY: 'auto',      // scroll ada di sini
+        overflowX: 'hidden',
+        paddingTop: '20px',
+        paddingBottom: '60px',
+        paddingLeft: '20px',
+        paddingRight: '20px',
+      }}
+    >
+      <div
+        className="animate-fade-in"
+        style={{
+          width: '100%',
+          maxWidth: '580px',
+          margin: '0 auto',     // center horizontal
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-light)',
+          borderRadius: '16px',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+          // TIDAK ada maxHeight, TIDAK ada overflow — konten bebas tumbuh ke bawah
+        }}
+      >
+        {/* Header Modal */}
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          borderRadius: '16px 16px 0 0',
+          background: 'var(--bg-card)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '36px', height: '36px', background: 'var(--accent-glow)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
+              {editProduct ? '✏️' : '📦'}
+            </div>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '17px', margin: 0 }}>
+                {editProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
+              </h2>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+                {editProduct ? `Mengedit: ${editProduct.name}` : 'Isi detail produk di bawah ini'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowModal(false)}
+            style={{ width: '32px', height: '32px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: '1' }}
+          >×</button>
+        </div>
+
+        {/* Body Modal */}
+        <div style={{ padding: '24px' }}>
+
+          {/* Foto Produk */}
+          <div style={{ marginBottom: '22px' }}>
+            <FieldLabel>Foto Produk</FieldLabel>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+              <div style={{ width: '100px', height: '100px', flexShrink: 0, background: 'var(--bg-hover)', border: `2px dashed ${imagePreview ? 'var(--accent)' : 'var(--border)'}`, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {imagePreview
+                  ? <img src={imagePreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' as const }} />
+                  : <span style={{ fontSize: '32px', opacity: 0.4 }}>💨</span>}
+              </div>
+              <label style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '6px', height: '100px', background: 'var(--bg-hover)', border: '1px dashed var(--border)', borderRadius: '10px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '22px' }}>📁</span>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', fontFamily: 'var(--font-syne)' }}>
+                  {imageFile ? imageFile.name.slice(0, 22) + '...' : 'Klik untuk upload'}
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>JPG, PNG, WEBP</span>
+                <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
+              </label>
+            </div>
+          </div>
+
+          <div style={{ height: '1px', background: 'var(--border)', marginBottom: '20px' }} />
+
+          {/* Nama */}
+          <div style={{ marginBottom: '16px' }}>
+            <FieldLabel required>Nama Produk</FieldLabel>
+            <input
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              placeholder="Contoh: Saltnic Mango Ice 30mg"
+            />
+          </div>
+
+          {/* Kategori */}
+          <div style={{ marginBottom: '16px' }}>
+            <FieldLabel>Kategori</FieldLabel>
+            <select value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })}>
+              <option value="">-- Pilih Kategori --</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {/* Harga */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div>
+              <FieldLabel required>Harga Jual</FieldLabel>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'var(--font-syne)', fontWeight: '600' }}>Rp</span>
+                <input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="0" style={{ paddingLeft: '36px' }} />
+              </div>
+            </div>
+            <div>
+              <FieldLabel>Harga Modal</FieldLabel>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'var(--font-syne)', fontWeight: '600' }}>Rp</span>
+                <input type="number" value={form.cost_price} onChange={e => setForm({ ...form, cost_price: e.target.value })} placeholder="0" style={{ paddingLeft: '36px' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Margin indicator */}
+          {marginData && (
+            <div style={{
+              background: marginData.margin >= 20 ? 'rgba(34,197,94,0.08)' : marginData.margin >= 0 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${marginData.margin >= 20 ? 'rgba(34,197,94,0.2)' : marginData.margin >= 0 ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'}`,
+              borderRadius: '8px', padding: '10px 14px', marginBottom: '16px',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>💹 Estimasi Profit per item</span>
+              <div>
+                <span style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '14px', color: marginData.margin >= 20 ? 'var(--accent)' : marginData.margin >= 0 ? '#f59e0b' : '#ef4444' }}>
+                  {formatRupiah(marginData.profit)}
+                </span>
+                <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: '600', fontFamily: 'var(--font-syne)', color: marginData.margin >= 20 ? 'var(--accent)' : marginData.margin >= 0 ? '#f59e0b' : '#ef4444' }}>
+                  ({marginData.margin}%)
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Stok */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+            <div>
+              <FieldLabel required>Stok Saat Ini</FieldLabel>
+              <input type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} placeholder="0" min="0" />
+            </div>
+            <div>
+              <FieldLabel>Min. Stok Alert</FieldLabel>
+              <input type="number" value={form.min_stock} onChange={e => setForm({ ...form, min_stock: e.target.value })} placeholder="5" min="0" />
+              <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>Notifikasi saat stok ≤ angka ini</p>
+            </div>
+          </div>
+
+          {/* Deskripsi */}
+          <div style={{ marginBottom: '16px' }}>
+            <FieldLabel>Deskripsi (opsional)</FieldLabel>
+            <textarea
+              value={form.description}
+              onChange={e => setForm({ ...form, description: e.target.value })}
+              placeholder="Contoh: Rasa mangga segar dengan sensasi dingin..."
+              rows={3}
+              style={{ resize: 'vertical' as const, lineHeight: '1.5' }}
+            />
+          </div>
+
+          {/* Toggle aktif */}
+          <div
+            onClick={() => setForm({ ...form, is_active: !form.is_active })}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'var(--bg-hover)', borderRadius: '10px', marginBottom: '24px', cursor: 'pointer' }}
+          >
+            <div>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', fontFamily: 'var(--font-syne)' }}>Tampilkan di Kasir</p>
+              <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>Produk nonaktif tidak muncul di halaman POS</p>
+            </div>
+            <div style={{ width: '44px', height: '24px', background: form.is_active ? 'var(--accent)' : 'var(--border)', borderRadius: '12px', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+              <div style={{ position: 'absolute', top: '3px', left: form.is_active ? '22px' : '3px', width: '18px', height: '18px', background: 'white', borderRadius: '50%', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
+            </div>
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => setShowModal(false)}
+              style={{ flex: 1, padding: '12px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontWeight: '600', fontFamily: 'var(--font-syne)', fontSize: '14px', cursor: 'pointer' }}
+            >Batal</button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !form.name || !form.price}
+              style={{ flex: 2, padding: '12px', background: (saving || !form.name || !form.price) ? 'var(--bg-hover)' : 'var(--accent)', border: 'none', borderRadius: '10px', color: (saving || !form.name || !form.price) ? 'var(--text-muted)' : '#000', fontWeight: '700', fontFamily: 'var(--font-syne)', fontSize: '14px', cursor: (saving || !form.name || !form.price) ? 'not-allowed' : 'pointer' }}
+            >
+              {saving ? '⏳ Menyimpan...' : editProduct ? '💾 Simpan Perubahan' : '✅ Tambah Produk'}
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="animate-fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -191,202 +402,8 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {showModal && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.75)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 200,
-            overflowY: 'auto',
-            paddingTop: '20px',
-            paddingBottom: '40px',
-            paddingLeft: '20px',
-            paddingRight: '20px',
-          }}
-        >
-          <div
-            className="animate-fade-in"
-            style={{
-              width: '100%',
-              maxWidth: '580px',
-              margin: '0 auto',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-light)',
-              borderRadius: '16px',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
-            }}
-          >
-            {/* Header Modal */}
-            <div style={{
-              padding: '20px 24px',
-              borderBottom: '1px solid var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderRadius: '16px 16px 0 0',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '36px', height: '36px', background: 'var(--accent-glow)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
-                  {editProduct ? '✏️' : '📦'}
-                </div>
-                <div>
-                  <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '17px', margin: 0 }}>
-                    {editProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
-                  </h2>
-                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-                    {editProduct ? `Mengedit: ${editProduct.name}` : 'Isi detail produk di bawah ini'}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{ width: '32px', height: '32px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: '1' }}
-              >×</button>
-            </div>
-
-            {/* Body Modal */}
-            <div style={{ padding: '24px' }}>
-
-              {/* Foto Produk */}
-              <div style={{ marginBottom: '22px' }}>
-                <FieldLabel>Foto Produk</FieldLabel>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-                  <div style={{ width: '100px', height: '100px', flexShrink: 0, background: 'var(--bg-hover)', border: `2px dashed ${imagePreview ? 'var(--accent)' : 'var(--border)'}`, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    {imagePreview
-                      ? <img src={imagePreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' as const }} />
-                      : <span style={{ fontSize: '32px', opacity: 0.4 }}>💨</span>}
-                  </div>
-                  <label style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '6px', height: '100px', background: 'var(--bg-hover)', border: '1px dashed var(--border)', borderRadius: '10px', cursor: 'pointer' }}>
-                    <span style={{ fontSize: '22px' }}>📁</span>
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', fontFamily: 'var(--font-syne)' }}>
-                      {imageFile ? imageFile.name.slice(0, 22) + '...' : 'Klik untuk upload'}
-                    </span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>JPG, PNG, WEBP</span>
-                    <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
-                  </label>
-                </div>
-              </div>
-
-              <div style={{ height: '1px', background: 'var(--border)', marginBottom: '20px' }} />
-
-              {/* Nama */}
-              <div style={{ marginBottom: '16px' }}>
-                <FieldLabel required>Nama Produk</FieldLabel>
-                <input
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  placeholder="Contoh: Saltnic Mango Ice 30mg"
-                />
-              </div>
-
-              {/* Kategori */}
-              <div style={{ marginBottom: '16px' }}>
-                <FieldLabel>Kategori</FieldLabel>
-                <select value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })}>
-                  <option value="">-- Pilih Kategori --</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-
-              {/* Harga */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <FieldLabel required>Harga Jual</FieldLabel>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'var(--font-syne)', fontWeight: '600' }}>Rp</span>
-                    <input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="0" style={{ paddingLeft: '36px' }} />
-                  </div>
-                </div>
-                <div>
-                  <FieldLabel>Harga Modal</FieldLabel>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '13px', fontFamily: 'var(--font-syne)', fontWeight: '600' }}>Rp</span>
-                    <input type="number" value={form.cost_price} onChange={e => setForm({ ...form, cost_price: e.target.value })} placeholder="0" style={{ paddingLeft: '36px' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Margin indicator */}
-              {marginData && (
-                <div style={{
-                  background: marginData.margin >= 20 ? 'rgba(34,197,94,0.08)' : marginData.margin >= 0 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
-                  border: `1px solid ${marginData.margin >= 20 ? 'rgba(34,197,94,0.2)' : marginData.margin >= 0 ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'}`,
-                  borderRadius: '8px', padding: '10px 14px', marginBottom: '16px',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                }}>
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>💹 Estimasi Profit per item</span>
-                  <div>
-                    <span style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '14px', color: marginData.margin >= 20 ? 'var(--accent)' : marginData.margin >= 0 ? '#f59e0b' : '#ef4444' }}>
-                      {formatRupiah(marginData.profit)}
-                    </span>
-                    <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: '600', fontFamily: 'var(--font-syne)', color: marginData.margin >= 20 ? 'var(--accent)' : marginData.margin >= 0 ? '#f59e0b' : '#ef4444' }}>
-                      ({marginData.margin}%)
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Stok */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                <div>
-                  <FieldLabel required>Stok Saat Ini</FieldLabel>
-                  <input type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} placeholder="0" min="0" />
-                </div>
-                <div>
-                  <FieldLabel>Min. Stok Alert</FieldLabel>
-                  <input type="number" value={form.min_stock} onChange={e => setForm({ ...form, min_stock: e.target.value })} placeholder="5" min="0" />
-                  <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>Notifikasi saat stok ≤ angka ini</p>
-                </div>
-              </div>
-
-              {/* Deskripsi */}
-              <div style={{ marginBottom: '16px' }}>
-                <FieldLabel>Deskripsi (opsional)</FieldLabel>
-                <textarea
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  placeholder="Contoh: Rasa mangga segar dengan sensasi dingin..."
-                  rows={3}
-                  style={{ resize: 'vertical' as const, lineHeight: '1.5' }}
-                />
-              </div>
-
-              {/* Toggle aktif */}
-              <div
-                onClick={() => setForm({ ...form, is_active: !form.is_active })}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'var(--bg-hover)', borderRadius: '10px', marginBottom: '24px', cursor: 'pointer' }}
-              >
-                <div>
-                  <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', fontFamily: 'var(--font-syne)' }}>Tampilkan di Kasir</p>
-                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>Produk nonaktif tidak muncul di halaman POS</p>
-                </div>
-                <div style={{ width: '44px', height: '24px', background: form.is_active ? 'var(--accent)' : 'var(--border)', borderRadius: '12px', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                  <div style={{ position: 'absolute', top: '3px', left: form.is_active ? '22px' : '3px', width: '18px', height: '18px', background: 'white', borderRadius: '50%', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
-                </div>
-              </div>
-
-              {/* Buttons */}
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={() => setShowModal(false)}
-                  style={{ flex: 1, padding: '12px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontWeight: '600', fontFamily: 'var(--font-syne)', fontSize: '14px', cursor: 'pointer' }}
-                >Batal</button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !form.name || !form.price}
-                  style={{ flex: 2, padding: '12px', background: (saving || !form.name || !form.price) ? 'var(--bg-hover)' : 'var(--accent)', border: 'none', borderRadius: '10px', color: (saving || !form.name || !form.price) ? 'var(--text-muted)' : '#000', fontWeight: '700', fontFamily: 'var(--font-syne)', fontSize: '14px', cursor: (saving || !form.name || !form.price) ? 'not-allowed' : 'pointer' }}
-                >
-                  {saving ? '⏳ Menyimpan...' : editProduct ? '💾 Simpan Perubahan' : '✅ Tambah Produk'}
-                </button>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Portal: render modal langsung ke document.body, bebas dari overflow:hidden parent */}
+      {mounted && showModal && createPortal(modalContent, document.body)}
     </div>
   )
 }
