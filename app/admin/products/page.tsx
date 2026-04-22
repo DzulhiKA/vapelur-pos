@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Product, Category } from '@/types'
 import { formatRupiah } from '@/lib/utils'
@@ -21,10 +21,17 @@ export default function ProductsPage() {
   const [imagePreview, setImagePreview] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
-  // Ref untuk reset scroll modal ke atas
-  const overlayRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => { fetchData() }, [])
+
+  // Kunci scroll body saat modal terbuka agar tidak double scroll
+  useEffect(() => {
+    if (showModal) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [showModal])
 
   const fetchData = async () => {
     const [{ data: prods }, { data: cats }] = await Promise.all([
@@ -42,8 +49,6 @@ export default function ProductsPage() {
     setImageFile(null)
     setImagePreview('')
     setShowModal(true)
-    // Reset scroll overlay ke atas setelah render
-    setTimeout(() => overlayRef.current?.scrollTo({ top: 0 }), 0)
   }
 
   const openEdit = (p: Product) => {
@@ -57,7 +62,6 @@ export default function ProductsPage() {
     setImageFile(null)
     setImagePreview(p.image_url || '')
     setShowModal(true)
-    setTimeout(() => overlayRef.current?.scrollTo({ top: 0 }), 0)
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,51 +192,59 @@ export default function ProductsPage() {
       </div>
 
       {showModal && (
-        // PERBAIKAN: overflowY dipindah ke overlay, alignItems: flex-start + paddingTop
-        // agar modal mulai dari atas dan bisa di-scroll jika konten panjang
         <div
-          ref={overlayRef}
           onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}
           style={{
-            position: 'fixed', inset: 0,
+            position: 'fixed',
+            inset: 0,
             background: 'rgba(0,0,0,0.75)',
             backdropFilter: 'blur(4px)',
             zIndex: 200,
-            overflowY: 'auto',              // scroll di overlay
-            padding: '20px 20px 40px',      // paddingBottom ekstra agar konten bawah tidak terpotong
+            overflowY: 'auto',
+            paddingTop: '20px',
+            paddingBottom: '40px',
+            paddingLeft: '20px',
+            paddingRight: '20px',
           }}
         >
-          {/* Wrapper tengah — bukan flex di overlay langsung agar scroll tidak bermasalah */}
-          <div style={{ minHeight: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
           <div
             className="animate-fade-in"
             style={{
               width: '100%',
               maxWidth: '580px',
+              margin: '0 auto',
               background: 'var(--bg-card)',
               border: '1px solid var(--border-light)',
               borderRadius: '16px',
               boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
             }}
           >
-            {/* Header Modal — sticky tidak diperlukan lagi karena tidak ada nested scroll */}
+            {/* Header Modal */}
             <div style={{
               padding: '20px 24px',
               borderBottom: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               borderRadius: '16px 16px 0 0',
-              background: 'var(--bg-card)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ width: '36px', height: '36px', background: 'var(--accent-glow)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
                   {editProduct ? '✏️' : '📦'}
                 </div>
                 <div>
-                  <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '17px', margin: 0 }}>{editProduct ? 'Edit Produk' : 'Tambah Produk Baru'}</h2>
-                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>{editProduct ? `Mengedit: ${editProduct.name}` : 'Isi detail produk di bawah ini'}</p>
+                  <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '17px', margin: 0 }}>
+                    {editProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
+                  </h2>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+                    {editProduct ? `Mengedit: ${editProduct.name}` : 'Isi detail produk di bawah ini'}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ width: '32px', height: '32px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: '1' }}>×</button>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{ width: '32px', height: '32px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: '1' }}
+              >×</button>
             </div>
 
             {/* Body Modal */}
@@ -243,11 +255,15 @@ export default function ProductsPage() {
                 <FieldLabel>Foto Produk</FieldLabel>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                   <div style={{ width: '100px', height: '100px', flexShrink: 0, background: 'var(--bg-hover)', border: `2px dashed ${imagePreview ? 'var(--accent)' : 'var(--border)'}`, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    {imagePreview ? <img src={imagePreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' as const }} /> : <span style={{ fontSize: '32px', opacity: 0.4 }}>💨</span>}
+                    {imagePreview
+                      ? <img src={imagePreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' as const }} />
+                      : <span style={{ fontSize: '32px', opacity: 0.4 }}>💨</span>}
                   </div>
                   <label style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '6px', height: '100px', background: 'var(--bg-hover)', border: '1px dashed var(--border)', borderRadius: '10px', cursor: 'pointer' }}>
                     <span style={{ fontSize: '22px' }}>📁</span>
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', fontFamily: 'var(--font-syne)' }}>{imageFile ? imageFile.name.slice(0, 22) + '...' : 'Klik untuk upload'}</span>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', fontFamily: 'var(--font-syne)' }}>
+                      {imageFile ? imageFile.name.slice(0, 22) + '...' : 'Klik untuk upload'}
+                    </span>
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>JPG, PNG, WEBP</span>
                     <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
                   </label>
@@ -259,7 +275,11 @@ export default function ProductsPage() {
               {/* Nama */}
               <div style={{ marginBottom: '16px' }}>
                 <FieldLabel required>Nama Produk</FieldLabel>
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Contoh: Saltnic Mango Ice 30mg" />
+                <input
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  placeholder="Contoh: Saltnic Mango Ice 30mg"
+                />
               </div>
 
               {/* Kategori */}
@@ -291,11 +311,20 @@ export default function ProductsPage() {
 
               {/* Margin indicator */}
               {marginData && (
-                <div style={{ background: marginData.margin >= 20 ? 'rgba(34,197,94,0.08)' : marginData.margin >= 0 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${marginData.margin >= 20 ? 'rgba(34,197,94,0.2)' : marginData.margin >= 0 ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'}`, borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{
+                  background: marginData.margin >= 20 ? 'rgba(34,197,94,0.08)' : marginData.margin >= 0 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
+                  border: `1px solid ${marginData.margin >= 20 ? 'rgba(34,197,94,0.2)' : marginData.margin >= 0 ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                  borderRadius: '8px', padding: '10px 14px', marginBottom: '16px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>💹 Estimasi Profit per item</span>
                   <div>
-                    <span style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '14px', color: marginData.margin >= 20 ? 'var(--accent)' : marginData.margin >= 0 ? '#f59e0b' : '#ef4444' }}>{formatRupiah(marginData.profit)}</span>
-                    <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: '600', fontFamily: 'var(--font-syne)', color: marginData.margin >= 20 ? 'var(--accent)' : marginData.margin >= 0 ? '#f59e0b' : '#ef4444' }}>({marginData.margin}%)</span>
+                    <span style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '14px', color: marginData.margin >= 20 ? 'var(--accent)' : marginData.margin >= 0 ? '#f59e0b' : '#ef4444' }}>
+                      {formatRupiah(marginData.profit)}
+                    </span>
+                    <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: '600', fontFamily: 'var(--font-syne)', color: marginData.margin >= 20 ? 'var(--accent)' : marginData.margin >= 0 ? '#f59e0b' : '#ef4444' }}>
+                      ({marginData.margin}%)
+                    </span>
                   </div>
                 </div>
               )}
@@ -316,11 +345,20 @@ export default function ProductsPage() {
               {/* Deskripsi */}
               <div style={{ marginBottom: '16px' }}>
                 <FieldLabel>Deskripsi (opsional)</FieldLabel>
-                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Contoh: Rasa mangga segar dengan sensasi dingin..." rows={3} style={{ resize: 'vertical' as const, lineHeight: '1.5' }} />
+                <textarea
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  placeholder="Contoh: Rasa mangga segar dengan sensasi dingin..."
+                  rows={3}
+                  style={{ resize: 'vertical' as const, lineHeight: '1.5' }}
+                />
               </div>
 
               {/* Toggle aktif */}
-              <div onClick={() => setForm({ ...form, is_active: !form.is_active })} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'var(--bg-hover)', borderRadius: '10px', marginBottom: '24px', cursor: 'pointer' }}>
+              <div
+                onClick={() => setForm({ ...form, is_active: !form.is_active })}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'var(--bg-hover)', borderRadius: '10px', marginBottom: '24px', cursor: 'pointer' }}
+              >
                 <div>
                   <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', fontFamily: 'var(--font-syne)' }}>Tampilkan di Kasir</p>
                   <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>Produk nonaktif tidak muncul di halaman POS</p>
@@ -332,14 +370,21 @@ export default function ProductsPage() {
 
               {/* Buttons */}
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={() => setShowModal(false)} style={{ flex: 1, padding: '12px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontWeight: '600', fontFamily: 'var(--font-syne)', fontSize: '14px', cursor: 'pointer' }}>Batal</button>
-                <button onClick={handleSave} disabled={saving || !form.name || !form.price} style={{ flex: 2, padding: '12px', background: (saving || !form.name || !form.price) ? 'var(--bg-hover)' : 'var(--accent)', border: 'none', borderRadius: '10px', color: (saving || !form.name || !form.price) ? 'var(--text-muted)' : '#000', fontWeight: '700', fontFamily: 'var(--font-syne)', fontSize: '14px', cursor: (saving || !form.name || !form.price) ? 'not-allowed' : 'pointer' }}>
+                <button
+                  onClick={() => setShowModal(false)}
+                  style={{ flex: 1, padding: '12px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontWeight: '600', fontFamily: 'var(--font-syne)', fontSize: '14px', cursor: 'pointer' }}
+                >Batal</button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !form.name || !form.price}
+                  style={{ flex: 2, padding: '12px', background: (saving || !form.name || !form.price) ? 'var(--bg-hover)' : 'var(--accent)', border: 'none', borderRadius: '10px', color: (saving || !form.name || !form.price) ? 'var(--text-muted)' : '#000', fontWeight: '700', fontFamily: 'var(--font-syne)', fontSize: '14px', cursor: (saving || !form.name || !form.price) ? 'not-allowed' : 'pointer' }}
+                >
                   {saving ? '⏳ Menyimpan...' : editProduct ? '💾 Simpan Perubahan' : '✅ Tambah Produk'}
                 </button>
               </div>
+
             </div>
           </div>
-          </div> {/* end wrapper tengah */}
         </div>
       )}
     </div>
