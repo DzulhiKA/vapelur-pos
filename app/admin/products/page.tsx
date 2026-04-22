@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Product, Category } from '@/types'
 import { formatRupiah } from '@/lib/utils'
@@ -21,6 +21,9 @@ export default function ProductsPage() {
   const [imagePreview, setImagePreview] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
+  // Ref untuk reset scroll modal ke atas
+  const overlayRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
@@ -39,6 +42,8 @@ export default function ProductsPage() {
     setImageFile(null)
     setImagePreview('')
     setShowModal(true)
+    // Reset scroll overlay ke atas setelah render
+    setTimeout(() => overlayRef.current?.scrollTo({ top: 0 }), 0)
   }
 
   const openEdit = (p: Product) => {
@@ -52,6 +57,7 @@ export default function ProductsPage() {
     setImageFile(null)
     setImagePreview(p.image_url || '')
     setShowModal(true)
+    setTimeout(() => overlayRef.current?.scrollTo({ top: 0 }), 0)
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -182,11 +188,46 @@ export default function ProductsPage() {
       </div>
 
       {showModal && (
-        <div onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '20px' }}>
-          <div className="animate-fade-in" style={{ width: '100%', maxWidth: '580px', background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: '16px', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
-
-            {/* Header Modal */}
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1, borderRadius: '16px 16px 0 0' }}>
+        // PERBAIKAN: overflowY dipindah ke overlay, alignItems: flex-start + paddingTop
+        // agar modal mulai dari atas dan bisa di-scroll jika konten panjang
+        <div
+          ref={overlayRef}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'flex-start',       // ← bukan 'center', agar modal mulai dari atas
+            justifyContent: 'center',
+            zIndex: 200,
+            padding: '20px',
+            overflowY: 'auto',              // ← scroll ada di overlay, bukan di inner div
+          }}
+        >
+          <div
+            className="animate-fade-in"
+            style={{
+              width: '100%',
+              maxWidth: '580px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-light)',
+              borderRadius: '16px',
+              // PERBAIKAN: hapus maxHeight & overflowY dari sini
+              // biarkan konten natural dan overlay yang scroll
+              boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+              marginTop: 'auto',
+              marginBottom: 'auto',
+            }}
+          >
+            {/* Header Modal — sticky tidak diperlukan lagi karena tidak ada nested scroll */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              borderRadius: '16px 16px 0 0',
+              background: 'var(--bg-card)',
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ width: '36px', height: '36px', background: 'var(--accent-glow)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
                   {editProduct ? '✏️' : '📦'}
