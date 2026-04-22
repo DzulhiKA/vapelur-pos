@@ -197,14 +197,13 @@ export default function ProductsPage() {
             position: 'fixed', inset: 0,
             background: 'rgba(0,0,0,0.75)',
             backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'flex-start',       // ← bukan 'center', agar modal mulai dari atas
-            justifyContent: 'center',
             zIndex: 200,
-            padding: '20px',
-            overflowY: 'auto',              // ← scroll ada di overlay, bukan di inner div
+            overflowY: 'auto',              // scroll di overlay
+            padding: '20px 20px 40px',      // paddingBottom ekstra agar konten bawah tidak terpotong
           }}
         >
+          {/* Wrapper tengah — bukan flex di overlay langsung agar scroll tidak bermasalah */}
+          <div style={{ minHeight: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
           <div
             className="animate-fade-in"
             style={{
@@ -213,11 +212,7 @@ export default function ProductsPage() {
               background: 'var(--bg-card)',
               border: '1px solid var(--border-light)',
               borderRadius: '16px',
-              // PERBAIKAN: hapus maxHeight & overflowY dari sini
-              // biarkan konten natural dan overlay yang scroll
               boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
-              marginTop: 'auto',
-              marginBottom: 'auto',
             }}
           >
             {/* Header Modal — sticky tidak diperlukan lagi karena tidak ada nested scroll */}
@@ -344,6 +339,7 @@ export default function ProductsPage() {
               </div>
             </div>
           </div>
+          </div> {/* end wrapper tengah */}
         </div>
       )}
     </div>
