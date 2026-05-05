@@ -226,8 +226,9 @@ export default function UsersPage() {
           justifyContent: 'center',
           zIndex: 200,
           padding: '20px',
+          overflowY: 'auto',
         }}>
-          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '440px', padding: '28px' }}>
+          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '440px', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '20px', marginBottom: '20px' }}>
               Tambah Pengguna
             </h2>
