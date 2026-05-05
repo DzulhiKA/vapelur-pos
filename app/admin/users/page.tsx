@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { UserProfile } from '@/types'
 import { formatDate } from '@/lib/utils'
@@ -13,8 +14,28 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ email: '', password: '', full_name: '', role: 'cashier' as 'admin' | 'cashier' })
   const [error, setError] = useState('')
+  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    setMounted(true)
+    fetchData()
+  }, [])
+
+  // Handle body scroll when modal is open
+  useEffect(() => {
+    if (!mounted) return
+    if (showModal) {
+      document.documentElement.style.overflow = 'hidden'
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
+    }
+  }, [showModal, mounted])
 
   const fetchData = async () => {
     setLoading(true)
@@ -71,6 +92,154 @@ export default function UsersPage() {
     await fetchData()
   }
 
+  const modalContent = (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}
+      style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.75)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 99999,
+        overflowY: 'auto',
+        padding: '20px',
+        display: 'flex',
+        alignItems: 'flex-start', // Align to top to allow natural scrolling
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        className="animate-fade-in"
+        style={{
+          width: '100%',
+          maxWidth: '460px',
+          margin: '40px auto', // Margin top/bottom for spacing
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-light)',
+          borderRadius: '16px',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+          padding: 0,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header Modal */}
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--bg-card)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '36px', height: '36px', background: 'var(--accent-glow)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
+              👤
+            </div>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '17px', margin: 0 }}>
+                Tambah Pengguna Baru
+              </h2>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+                Isi detail akun di bawah ini
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowModal(false)}
+            style={{ width: '32px', height: '32px', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >×</button>
+        </div>
+
+        {/* Body Modal */}
+        <div style={{ padding: '24px' }}>
+          <div style={{ display: 'grid', gap: '18px' }}>
+            <div>
+              <FieldLabel required>Nama Lengkap</FieldLabel>
+              <input
+                value={form.full_name}
+                onChange={e => setForm({ ...form, full_name: e.target.value })}
+                placeholder="Nama lengkap kasir"
+              />
+            </div>
+            <div>
+              <FieldLabel required>Email</FieldLabel>
+              <input
+                type="email"
+                value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="email@vapelur.com"
+              />
+            </div>
+            <div>
+              <FieldLabel required>Password</FieldLabel>
+              <input
+                type="password"
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder="Minimal 6 karakter"
+              />
+            </div>
+            <div>
+              <FieldLabel>Role</FieldLabel>
+              <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as any })}>
+                <option value="cashier">🧑‍💼 Kasir</option>
+                <option value="admin">👑 Admin</option>
+              </select>
+            </div>
+          </div>
+
+          {error && (
+            <div style={{
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              marginTop: '18px',
+              color: '#ef4444',
+              fontSize: '13px',
+            }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px', marginTop: '28px' }}>
+            <button
+              onClick={() => setShowModal(false)}
+              style={{
+                flex: 1,
+                padding: '12px',
+                background: 'var(--bg-hover)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                color: 'var(--text-secondary)',
+                fontWeight: '600',
+                fontFamily: 'var(--font-syne)',
+                cursor: 'pointer'
+              }}
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={saving}
+              style={{
+                flex: 2,
+                padding: '12px',
+                background: saving ? 'var(--bg-hover)' : 'var(--accent)',
+                border: 'none',
+                borderRadius: '10px',
+                color: saving ? 'var(--text-muted)' : '#000',
+                fontWeight: '700',
+                fontFamily: 'var(--font-syne)',
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {saving ? '⏳ Membuat Akun...' : '✅ Buat Akun'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="animate-fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -93,6 +262,7 @@ export default function UsersPage() {
             fontWeight: '700',
             fontFamily: 'var(--font-syne)',
             fontSize: '14px',
+            cursor: 'pointer'
           }}
         >
           + Tambah Pengguna
@@ -187,6 +357,7 @@ export default function UsersPage() {
                           fontSize: '12px',
                           fontWeight: '600',
                           fontFamily: 'var(--font-syne)',
+                          cursor: 'pointer'
                         }}
                       >
                         {user.role === 'admin' ? '→ Kasir' : '→ Admin'}
@@ -202,6 +373,7 @@ export default function UsersPage() {
                           fontSize: '12px',
                           fontWeight: '600',
                           fontFamily: 'var(--font-syne)',
+                          cursor: 'pointer'
                         }}
                       >
                         {user.is_active ? 'Nonaktifkan' : 'Aktifkan'}
@@ -215,97 +387,16 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Add User Modal */}
-      {showModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 200,
-          padding: '20px',
-          overflowY: 'auto',
-        }}>
-          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '440px', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ fontFamily: 'var(--font-syne)', fontWeight: '700', fontSize: '20px', marginBottom: '20px' }}>
-              Tambah Pengguna
-            </h2>
-
-            <div style={{ display: 'grid', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-syne)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Nama Lengkap *</label>
-                <input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} placeholder="Nama kasir" />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-syne)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email *</label>
-                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="kasir@vapelur.com" />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-syne)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Password *</label>
-                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Min. 6 karakter" />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-syne)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Role</label>
-                <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as any })}>
-                  <option value="cashier">🧑‍💼 Kasir</option>
-                  <option value="admin">👑 Admin</option>
-                </select>
-              </div>
-            </div>
-
-            {error && (
-              <div style={{
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.3)',
-                borderRadius: '8px',
-                padding: '10px 14px',
-                marginTop: '14px',
-                color: '#ef4444',
-                fontSize: '13px',
-              }}>
-                {error}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: 'var(--bg-hover)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  color: 'var(--text-secondary)',
-                  fontWeight: '600',
-                  fontFamily: 'var(--font-syne)',
-                }}
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleCreate}
-                disabled={saving}
-                style={{
-                  flex: 2,
-                  padding: '12px',
-                  background: saving ? 'var(--bg-hover)' : 'var(--accent)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: saving ? 'var(--text-muted)' : '#000',
-                  fontWeight: '700',
-                  fontFamily: 'var(--font-syne)',
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {saving ? 'Membuat Akun...' : 'Buat Akun'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Render modal via Portal to avoid overflow issues */}
+      {mounted && showModal && createPortal(modalContent, document.body)}
     </div>
+  )
+}
+
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-syne)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+      {children}{required && <span style={{ color: 'var(--accent)', marginLeft: '3px' }}>*</span>}
+    </label>
   )
 }
