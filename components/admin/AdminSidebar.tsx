@@ -10,6 +10,7 @@ const navItems = [
   { href: '/admin/transactions', icon: '🧾', label: 'Transaksi' },
   { href: '/admin/users', icon: '👥', label: 'Pengguna' },
   { href: '/admin/settings', icon: '⚙️', label: 'Pengaturan' },
+  { href: '/admin/faq', icon: '❓', label: 'FAQ & Panduan' },
 ]
 
 export default function AdminSidebar({ user, profile }: { user: any; profile: any }) {
