@@ -73,36 +73,32 @@ export default function SettingsPage() {
         updated_at: new Date().toISOString(),
       }
 
-      let savedData: StoreSettings | null = null
-
       if (settings?.id) {
-        // UPDATE jika sudah ada row
-        const { data, error } = await supabase
+        // UPDATE jika sudah ada row — tanpa .select() agar tidak kena RLS 406
+        const { error } = await supabase
           .from('store_settings')
           .update(payload)
           .eq('id', settings.id)
-          .select()
-          .single()
 
         if (error) throw error
-        savedData = data
       } else {
-        // INSERT jika belum ada row sama sekali
-        const { data, error } = await supabase
+        // INSERT jika belum ada row sama sekali — tanpa .select() agar tidak kena RLS 406
+        const { error } = await supabase
           .from('store_settings')
           .insert(payload)
-          .select()
-          .single()
 
         if (error) throw error
-        savedData = data
       }
 
-      // Update state dengan data terbaru agar simpan berikutnya juga benar
-      if (savedData) {
-        setSettings(savedData)
-        if (savedData.qris_image_url) setQrisPreview(savedData.qris_image_url)
+      // Konstruksi state lokal secara manual dari data yang sudah kita kirim
+      // (tidak perlu read-back dari DB, menghindari 406 dari RLS)
+      const updatedSettings: StoreSettings = {
+        ...(settings ?? ({} as StoreSettings)),
+        ...payload,
+        id: settings?.id ?? '',
       }
+      setSettings(updatedSettings)
+      if (qris_image_url) setQrisPreview(qris_image_url)
       setQrisFile(null)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
