@@ -46,16 +46,20 @@ export default function SettingsPage() {
     try {
       let qris_image_url = settings?.qris_image_url ?? null
 
+      console.log('[Settings] Mulai simpan. settings?.id =', settings?.id)
+
       // Upload foto QRIS jika ada file baru
       if (qrisFile) {
         const ext = qrisFile.name.split('.').pop()
         const fileName = `qris-vapelur-${Date.now()}.${ext}`
+        console.log('[Settings] Upload QRIS ke bucket:', fileName)
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('qris-image')
           .upload(fileName, qrisFile, { upsert: true })
 
         if (uploadError) {
+          console.error('[Settings] Upload gagal:', uploadError)
           setSaveError(`Gagal upload foto QRIS: ${uploadError.message}`)
           setSaving(false)
           return
@@ -64,6 +68,7 @@ export default function SettingsPage() {
         if (uploadData) {
           const { data: urlData } = supabase.storage.from('qris-image').getPublicUrl(fileName)
           qris_image_url = urlData.publicUrl
+          console.log('[Settings] Upload berhasil, public URL:', qris_image_url)
         }
       }
 
@@ -73,21 +78,25 @@ export default function SettingsPage() {
         updated_at: new Date().toISOString(),
       }
 
+      console.log('[Settings] Payload yang akan disimpan:', payload)
+
       if (settings?.id) {
-        // UPDATE jika sudah ada row — tanpa .select() agar tidak kena RLS 406
-        const { error } = await supabase
+        console.log('[Settings] Menjalankan UPDATE, id:', settings.id)
+        const { error, status, statusText } = await supabase
           .from('store_settings')
           .update(payload)
           .eq('id', settings.id)
 
-        if (error) throw error
+        console.log('[Settings] Hasil UPDATE — status:', status, statusText, '| error:', error)
+        if (error) throw new Error(`UPDATE gagal (${status}): ${error.message}`)
       } else {
-        // INSERT jika belum ada row sama sekali — tanpa .select() agar tidak kena RLS 406
-        const { error } = await supabase
+        console.log('[Settings] Tidak ada row, menjalankan INSERT...')
+        const { error, status, statusText } = await supabase
           .from('store_settings')
           .insert(payload)
 
-        if (error) throw error
+        console.log('[Settings] Hasil INSERT — status:', status, statusText, '| error:', error)
+        if (error) throw new Error(`INSERT gagal (${status}): ${error.message}`)
       }
 
       // Konstruksi state lokal secara manual dari data yang sudah kita kirim
