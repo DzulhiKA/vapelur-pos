@@ -92,10 +92,16 @@ export default function SettingsPage() {
 
       // Konstruksi state lokal secara manual dari data yang sudah kita kirim
       // (tidak perlu read-back dari DB, menghindari 406 dari RLS)
+      // Dibangun field-by-field agar tipe data cocok dengan interface StoreSettings
       const updatedSettings: StoreSettings = {
-        ...(settings ?? ({} as StoreSettings)),
-        ...payload,
         id: settings?.id ?? '',
+        created_at: settings?.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        store_name: form.store_name,
+        address: form.address || undefined,
+        phone: form.phone || undefined,
+        receipt_footer: form.receipt_footer || undefined,
+        qris_image_url: qris_image_url ?? undefined,  // null → undefined agar cocok tipe StoreSettings
       }
       setSettings(updatedSettings)
       if (qris_image_url) setQrisPreview(qris_image_url)
