@@ -12,10 +12,11 @@ export default function SettingsPage() {
   const [qrisPreview, setQrisPreview] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('store_settings').select('*').single().then(({ data }) => {
+    supabase.from('store_settings').select('*').single().then(({ data, error }) => {
       if (data) {
         setSettings(data)
         setForm({
@@ -26,6 +27,7 @@ export default function SettingsPage() {
         })
         if (data.qris_image_url) setQrisPreview(data.qris_image_url)
       }
+      // If no data (error code PGRST116 = no rows found), settings stays null — that's fine
       setLoading(false)
     })
   }, [])
@@ -38,31 +40,78 @@ export default function SettingsPage() {
   }
 
   const handleSave = async () => {
-    if (!settings) return
     setSaving(true)
+    setSaveError(null)
 
-    let qris_image_url = settings.qris_image_url
+    try {
+      let qris_image_url = settings?.qris_image_url ?? null
 
-    if (qrisFile) {
-      const fileName = `qris-vapelur-${Date.now()}.${qrisFile.name.split('.').pop()}`
-      const { data: uploadData } = await supabase.storage
-        .from('qris-image')
-        .upload(fileName, qrisFile, { upsert: true })
+      // Upload foto QRIS jika ada file baru
+      if (qrisFile) {
+        const ext = qrisFile.name.split('.').pop()
+        const fileName = `qris-vapelur-${Date.now()}.${ext}`
 
-      if (uploadData) {
-        const { data: urlData } = supabase.storage.from('qris-image').getPublicUrl(fileName)
-        qris_image_url = urlData.publicUrl
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('qris-image')
+          .upload(fileName, qrisFile, { upsert: true })
+
+        if (uploadError) {
+          setSaveError(`Gagal upload foto QRIS: ${uploadError.message}`)
+          setSaving(false)
+          return
+        }
+
+        if (uploadData) {
+          const { data: urlData } = supabase.storage.from('qris-image').getPublicUrl(fileName)
+          qris_image_url = urlData.publicUrl
+        }
       }
+
+      const payload = {
+        ...form,
+        qris_image_url,
+        updated_at: new Date().toISOString(),
+      }
+
+      let savedData: StoreSettings | null = null
+
+      if (settings?.id) {
+        // UPDATE jika sudah ada row
+        const { data, error } = await supabase
+          .from('store_settings')
+          .update(payload)
+          .eq('id', settings.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        savedData = data
+      } else {
+        // INSERT jika belum ada row sama sekali
+        const { data, error } = await supabase
+          .from('store_settings')
+          .insert(payload)
+          .select()
+          .single()
+
+        if (error) throw error
+        savedData = data
+      }
+
+      // Update state dengan data terbaru agar simpan berikutnya juga benar
+      if (savedData) {
+        setSettings(savedData)
+        if (savedData.qris_image_url) setQrisPreview(savedData.qris_image_url)
+      }
+      setQrisFile(null)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Terjadi kesalahan tidak diketahui'
+      setSaveError(`Gagal menyimpan: ${msg}`)
+    } finally {
+      setSaving(false)
     }
-
-    await supabase.from('store_settings').update({
-      ...form,
-      qris_image_url,
-    }).eq('id', settings.id)
-
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
   }
 
   if (loading) return (
@@ -79,6 +128,22 @@ export default function SettingsPage() {
       <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>
         Konfigurasi informasi toko dan metode pembayaran
       </p>
+
+      {/* Error Banner */}
+      {saveError && (
+        <div style={{
+          background: 'rgba(239,68,68,0.1)',
+          border: '1px solid rgba(239,68,68,0.3)',
+          borderRadius: '10px',
+          padding: '12px 16px',
+          marginBottom: '20px',
+          color: '#ef4444',
+          fontSize: '13px',
+          fontWeight: '600',
+        }}>
+          ⚠️ {saveError}
+        </div>
+      )}
 
       {/* Store Info */}
       <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
@@ -158,7 +223,12 @@ export default function SettingsPage() {
             flexShrink: 0,
           }}>
             {qrisPreview ? (
-              <img src={qrisPreview} alt="QRIS Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              <img
+                src={qrisPreview}
+                alt="QRIS Preview"
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                onError={() => setQrisPreview('')}
+              />
             ) : (
               <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                 <p style={{ fontSize: '32px', margin: '0 0 6px' }}>📱</p>
@@ -177,6 +247,11 @@ export default function SettingsPage() {
               onChange={handleQrisChange}
               style={{ marginBottom: '10px', padding: '8px' }}
             />
+            {qrisFile && (
+              <p style={{ fontSize: '12px', color: 'var(--accent)', margin: '0 0 8px', fontWeight: '600' }}>
+                ✅ File dipilih: {qrisFile.name}
+              </p>
+            )}
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
               Format: JPG, PNG, atau WEBP.<br />
               Pastikan QR Code terlihat jelas dan tidak terpotong.
