@@ -16,20 +16,23 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('store_settings').select('*').single().then(({ data, error }) => {
-      if (data) {
-        setSettings(data)
-        setForm({
-          store_name: data.store_name || '',
-          address: data.address || '',
-          phone: data.phone || '',
-          receipt_footer: data.receipt_footer || '',
-        })
-        if (data.qris_image_url) setQrisPreview(data.qris_image_url)
-      }
-      // If no data (error code PGRST116 = no rows found), settings stays null — that's fine
-      setLoading(false)
-    })
+    // Fetch via API route agar konsisten
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(({ data }) => {
+        if (data) {
+          setSettings(data)
+          setForm({
+            store_name: data.store_name || '',
+            address: data.address || '',
+            phone: data.phone || '',
+            receipt_footer: data.receipt_footer || '',
+          })
+          if (data.qris_image_url) setQrisPreview(data.qris_image_url)
+        }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [])
 
   const handleQrisChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,20 +49,16 @@ export default function SettingsPage() {
     try {
       let qris_image_url = settings?.qris_image_url ?? null
 
-      console.log('[Settings] Mulai simpan. settings?.id =', settings?.id)
-
       // Upload foto QRIS jika ada file baru
       if (qrisFile) {
         const ext = qrisFile.name.split('.').pop()
         const fileName = `qris-vapelur-${Date.now()}.${ext}`
-        console.log('[Settings] Upload QRIS ke bucket:', fileName)
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('qris-image')
           .upload(fileName, qrisFile, { upsert: true })
 
         if (uploadError) {
-          console.error('[Settings] Upload gagal:', uploadError)
           setSaveError(`Gagal upload foto QRIS: ${uploadError.message}`)
           setSaving(false)
           return
@@ -68,52 +67,42 @@ export default function SettingsPage() {
         if (uploadData) {
           const { data: urlData } = supabase.storage.from('qris-image').getPublicUrl(fileName)
           qris_image_url = urlData.publicUrl
-          console.log('[Settings] Upload berhasil, public URL:', qris_image_url)
         }
       }
 
-      const payload = {
-        ...form,
-        qris_image_url,
-        updated_at: new Date().toISOString(),
+      // Simpan ke DB via API Route (bypass RLS dengan service role key)
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: settings?.id ?? null,
+          ...form,
+          qris_image_url,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        throw new Error(result.error || `Server error ${res.status}`)
       }
 
-      console.log('[Settings] Payload yang akan disimpan:', payload)
-
-      if (settings?.id) {
-        console.log('[Settings] Menjalankan UPDATE, id:', settings.id)
-        const { error, status, statusText } = await supabase
-          .from('store_settings')
-          .update(payload)
-          .eq('id', settings.id)
-
-        console.log('[Settings] Hasil UPDATE — status:', status, statusText, '| error:', error)
-        if (error) throw new Error(`UPDATE gagal (${status}): ${error.message}`)
-      } else {
-        console.log('[Settings] Tidak ada row, menjalankan INSERT...')
-        const { error, status, statusText } = await supabase
-          .from('store_settings')
-          .insert(payload)
-
-        console.log('[Settings] Hasil INSERT — status:', status, statusText, '| error:', error)
-        if (error) throw new Error(`INSERT gagal (${status}): ${error.message}`)
+      // Update state lokal dengan data yang berhasil disimpan
+      if (result.data) {
+        const saved: StoreSettings = {
+          id: result.data.id ?? settings?.id ?? '',
+          created_at: settings?.created_at ?? new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          store_name: form.store_name,
+          address: form.address || undefined,
+          phone: form.phone || undefined,
+          receipt_footer: form.receipt_footer || undefined,
+          qris_image_url: qris_image_url ?? undefined,
+        }
+        setSettings(saved)
+        if (qris_image_url) setQrisPreview(qris_image_url)
       }
 
-      // Konstruksi state lokal secara manual dari data yang sudah kita kirim
-      // (tidak perlu read-back dari DB, menghindari 406 dari RLS)
-      // Dibangun field-by-field agar tipe data cocok dengan interface StoreSettings
-      const updatedSettings: StoreSettings = {
-        id: settings?.id ?? '',
-        created_at: settings?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        store_name: form.store_name,
-        address: form.address || undefined,
-        phone: form.phone || undefined,
-        receipt_footer: form.receipt_footer || undefined,
-        qris_image_url: qris_image_url ?? undefined,  // null → undefined agar cocok tipe StoreSettings
-      }
-      setSettings(updatedSettings)
-      if (qris_image_url) setQrisPreview(qris_image_url)
       setQrisFile(null)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
